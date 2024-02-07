@@ -146,7 +146,7 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
                         };
 
                         let new_key =
-                            format!("{}_rrs_w{}.{}", &resize_width, new_key, file_extension);
+                            format!("{}_rrs_w{}.{}", new_key, &resize_width, file_extension);
 
                         let put_req = PutObjectRequest {
                             bucket: bucket.to_string(),
