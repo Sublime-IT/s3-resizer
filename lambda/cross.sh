@@ -1,0 +1,1 @@
+cargo lambda build --compiler cross --release
