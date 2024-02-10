@@ -4,7 +4,7 @@ This project aims to make it easy to setup an S3 bucket with automatic image opt
 
 This means there is initially more compute and space required than doing it "on-the-fly", however; no users (even on low traffic pages) will experience longer loading times of images because they are always generated and ready to use.
 
-When new files are placed in your selected bucket, they will be generated to a set of sizes (specified by the project), a cloudfront function will ensure that parameters to the file such as (https://my.cloudfront.distro/image.png?width=500) will resolve into the resized image.
+When new files are placed in your selected bucket, they will be generated to a set of sizes (specified by the project), a cloudfront function will ensure that parameters to the file such as (https://my.cloudfront.distro/image.png?width=1920) will resolve into the resized image. With the default configuration, images will also be converted to webp - But it is easily modifable if this is not wanted (see releases for different configurations). You can also expand the code to include both original versions and webp versions, then change the cloudfront function to use an additional parameter (&format=webp).
 
 If a width parameter is specified, but the size is not in the SIZES list then it will just default back to the standard image.
 
