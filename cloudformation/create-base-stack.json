@@ -1,0 +1,217 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template to create an S3 bucket, a Lambda function running Rust code, and a trigger for new file uploads.",
+  "Parameters": {
+    "BucketName": {
+      "Type": "String",
+      "Description": "The name of the S3 bucket to create."
+    },
+    "LambdaCodeS3Bucket": {
+      "Type": "String",
+      "Description": "The name of the S3 bucket where the Lambda function code is stored."
+    },
+    "LambdaCodeS3Key": {
+      "Type": "String",
+      "Description": "The S3 key (file name) of the Lambda function code zip file."
+    }
+  },
+  "Resources": {
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Ref": "BucketName"
+        }
+      }
+    },
+    "S3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ",
+                      {
+                        "Ref": "CloudFrontOAI"
+                      }
+                    ]
+                  ]
+                }
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "Origins": [
+            {
+              "DomainName": {
+                "Fn::GetAtt": ["S3Bucket", "DomainName"]
+              },
+              "Id": "S3Origin",
+              "S3OriginConfig": {
+                "OriginAccessIdentity": {
+                  "Fn::Join": ["", ["origin-access-identity/cloudfront/", {"Ref": "CloudFrontOAI"}]]
+                }
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3Origin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "Compress": true,
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+            "CachedMethods": ["GET", "HEAD", "OPTIONS"],
+            "ForwardedValues": {
+              "QueryString": false,
+              "Cookies": {
+                "Forward": "none"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CloudFrontOAI": {
+      "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+      "Properties": {
+        "CloudFrontOriginAccessIdentityConfig": {
+          "Comment": {
+            "Fn::Sub": "OAI for ${BucketName}"
+          }
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:*"],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "LambdaCloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "does.not.matter",
+        "Role": {
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "LambdaCodeS3Bucket"
+          },
+          "S3Key": {
+            "Ref": "LambdaCodeS3Key"
+          }
+        },
+        "Runtime": "provided.al2",
+        "FunctionName": {
+          "Fn::Sub": "${BucketName}-rust-lambda"
+        },
+        "MemorySize": 128,
+        "Timeout": 15
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "LambdaFunction"
+        },
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["S3Bucket", "Arn"]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "BucketName": {
+      "Description": "Name of the S3 bucket",
+      "Value": {
+        "Ref": "BucketName"
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "The name of the Lambda function",
+      "Value": {
+        "Ref": "LambdaFunction"
+      }
+    },
+    "CloudFrontDistributionDomainName": {
+      "Description": "The domain name of the CloudFront distribution",
+      "Value": {
+        "Fn::GetAtt": ["CloudFrontDistribution", "DomainName"]
+      }
+    }
+  }
+}

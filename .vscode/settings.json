@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./lambda/integrations/umbraco-heartcore/Cargo.toml"
+    ]
+}

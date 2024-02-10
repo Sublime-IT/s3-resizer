@@ -16,6 +16,76 @@ TBD
 
 TBD
 
-## Setting up the project in AWS for a given bucket
+## Setting up on AWS
 
-TBD
+### If you are creating a new S3 bucket from scratch
+
+The easiest approach is creating a completely new bucket from scratch. 
+Start by adjusting the size parameters in the file
+
+> lambda/generate-sizes/src/main.rs
+
+Set the array to the sizes you want to generate: (for example, if u want [ 128, 256, ..., 1920 ])
+
+```RUST
+const SIZES: [u32; n] = [ 128, 256, ..., 1920 ];
+```
+
+Now build the project.
+
+```bash
+sudo chmod +x ./build-lambda.sh
+./build-lambda.sh
+```
+
+After that update the cloudfront javascript to reflect the sizes too:
+
+> cloudfront/rewrite-width-parameter-s3.js
+
+```JS
+const sizes = [ 128, 256, ..., 1920 ];
+```
+
+In AWS - If you don't already have a CloudFormation template bucket, then create one in S3 (for example: `cf-templates-l8fry6qzchzu-us-east-1`).
+
+Next upload the following two files to the cloudformation template bucket:
+
+ - cloudformation/create-base-stack.json
+ - lambda/generate-sizes/lambda.zip
+
+Go to `CloudFormation` and press `Create Stack`.
+
+Choose "Amazon S3 Url", and fill in: (e.g. https://s3.us-east-1.amazonaws.com/cf-templates-l8fry6qzchzu-us-east-1/create-base-stack.json)
+
+> `https://s3.{REGION}.amazonaws.com/{BUCKET_NAME}/create-base-stack.json`
+
+Next fill in the name of the new bucket you want to create (in bucket name).
+
+LambdaCodeS3Bucket is the bucket you uploaded the `lambda/generate-sizes/lambda.zip` file to.
+LambdaCodeS3Key is the path of the bucket (e.g. if it's in root, it will just be `lambda.zip`).
+
+Then create the cloudformation, and wait for it to complete.
+
+When it is complete, go to lambda and select the new lambda function (for example `my-sample-test-s3-bucket-rust-lambda`). Then:
+
+1. Click on the `Configuration` tab
+2. Select `S3` as source
+3. For the bucket, select the newly created bucket
+4. Event-Types should be set to `All object create events`
+5. Optionally, you can add a prefix/suffix if there is a certain sub-folder and/or image type that the generations should only happen to
+6. Add the trigger
+
+Next head over to the `CloudFront` service that was created. Go into functions, and create a new `cloudfront-js-2.0` function. Give it a name - This can be `rewrite-width-parameter-s3`
+
+In the `Function code` paste the contents of `cloudfront/rewrite-width-parameter-s3.js` into it. Then save changes, and publish them.
+
+Now go back into the CloudFront service and then:
+
+1. Click on the `Behaviours` tab, and select the default behaviour. 
+2. Press "Edit"
+3. In the bottom, where it says `Viewer Request` choose "CloudFront Functions" and then "rewrite-width-parameter-s3".
+4. Save changes
+
+This is all setup you need. Try uploading an image to the new bucket, and then visit the cloudfront url: https://my.cloudfront.url/test-image.jpg?width=500".
+
+If the size is not a pre-defined size, it will fallback to the original size.
