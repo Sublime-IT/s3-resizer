@@ -1,6 +1,10 @@
-# Automatic S3 - Image Resizer
+# AWS - S3 Bucket - Image Optimizer
 
-This project helps setting up the dependencies for automatically generating multiple image versions in S3. When new files are placed in your selected bucket, they will be generated to a set of sizes (specified by the project), a cloudfront function will ensure that parameters to the file such as (https://my.cloudfront.distro/image.png?width=500) will resolve into the correctly, already resized image.
+This project aims to make it easy to setup an S3 bucket with automatic image optimization. This creates a bucket, where any images uploaded to it will automatically be converted to WEBP and resized to a bunch of various sizes. It also creates a cloudfront distribution, and sets up a cloudfront function to automatically resolve "?width=NNN" parameters to the correct image. This approach aims to pre-generate all sizes, and not do it *on-the-fly*.
+
+This means there is initially more compute and space required than doing it "on-the-fly", however; no users (even on low traffic pages) will experience longer loading times of images because they are always generated and ready to use.
+
+When new files are placed in your selected bucket, they will be generated to a set of sizes (specified by the project), a cloudfront function will ensure that parameters to the file such as (https://my.cloudfront.distro/image.png?width=500) will resolve into the resized image.
 
 If a width parameter is specified, but the size is not in the SIZES list then it will just default back to the standard image.
 
@@ -31,7 +35,8 @@ Set the array to the sizes you want to generate: (for example, if u want [ 128, 
 const SIZES: [u32; n] = [ 128, 256, ..., 1920 ];
 ```
 
-Now build the project.
+Now build the project 
+(Note: If you don't want to build it manually, you can just download the lambda.zip file from the "Releases" tab. It has the standard configuration).
 
 ```bash
 sudo chmod +x ./build-lambda.sh
