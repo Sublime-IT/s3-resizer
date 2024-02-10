@@ -1,7 +1,8 @@
 function handler(event) {
     /* Modify this array into the available sizes */
-    const sizes = [ 500 ];
-    
+    const sizes = [ 128, 256, 384, 640, 750, 828, 1080, 1200, 1440, 1920 ];
+    const use_webp = true;
+
     /*------------*/
     var request = event.request;
     var uri = request.uri;
@@ -20,6 +21,10 @@ function handler(event) {
         var pathParts = uri.split('.');
         if (pathParts.length > 1) {
             var extension = pathParts.pop();
+            if (use_webp) {
+                extension = 'webp';
+            }
+            
             var newPath = pathParts.join('.') + '_rrs_w' + width + '.' + extension;
             request.uri = newPath;
         }

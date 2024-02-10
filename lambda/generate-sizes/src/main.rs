@@ -1,3 +1,5 @@
+use std::ops::ControlFlow;
+
 use futures_util::stream::TryStreamExt;
 use image::io::Reader as ImageReader;
 use image::DynamicImage;
@@ -8,7 +10,10 @@ use rusoto_core::Region;
 use rusoto_s3::{GetObjectRequest, HeadObjectError, PutObjectRequest, S3Client, S3};
 use simple_logger::SimpleLogger;
 
-const SIZES: [u32; 1] = [500];
+const SIZES: [u32; 10] = [
+    128, 256, 384, 640, 750, 828, 1080, 1200, 1440, 1920
+];
+const CONVERT_TO_WEBP: bool = true;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -83,7 +88,9 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
                 error!("No content type found for file: {}/{}", bucket, key);
                 continue;
             }
-            let content_type = maybe_content_type.as_ref().unwrap();
+            let content_type = maybe_content_type
+                .as_ref()
+                .expect("Content type should be set at this point");
 
             // verify that the object is not a thumbnail
             if key.contains("_rrs_w") {
@@ -102,7 +109,8 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
             };
 
             let result = s3_client.get_object(get_req).await?;
-            let stream = result.body.unwrap();
+            let stream = result.body
+                .expect("No body found in the response");
             let bytes: Vec<u8> = stream.map_ok(|b| b.to_vec()).try_concat().await?;
 
             if let Ok(image) = ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format() {
@@ -111,9 +119,16 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
                         let resized_image = resize_image(&dynamic_image, &resize_width)?;
                         let mut buffer = Vec::new();
 
+                        let content_type = if CONVERT_TO_WEBP {
+                            "image/webp".to_string()
+                        } else {
+                            content_type.clone()
+                        };
+
                         let image_format = match content_type.as_str() {
                             "image/jpeg" => image::ImageOutputFormat::Jpeg(90),
                             "image/png" => image::ImageOutputFormat::Png,
+                            "image/webp" => image::ImageOutputFormat::WebP,
                             _ => {
                                 error!("Unsupported image format: {}", &content_type);
                                 continue;
@@ -123,43 +138,18 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
                         let resize_message = resized_image
                             .write_to(&mut std::io::Cursor::new(&mut buffer), image_format);
 
-                        if let Err(e) = resize_message {
-                            error!("Failed to resize image: {}", e);
+                        if let ControlFlow::Break(_) = upload_image(
+                            resize_message,
+                            &content_type,
+                            &key,
+                            resize_width,
+                            bucket,
+                            buffer,
+                            &s3_client,
+                        )
+                        .await
+                        {
                             continue;
-                        }
-
-                        let file_extension = match content_type.as_str() {
-                            "image/jpeg" => "jpg",
-                            "image/png" => "png",
-                            _ => {
-                                error!(
-                                    "Unsupported file extension for content type: {}",
-                                    &content_type
-                                );
-                                continue;
-                            }
-                        };
-
-                        let new_key = match key.rsplitn(2, '.').collect::<Vec<_>>().last() {
-                            Some(part) => *part,
-                            None => key.as_str(),
-                        };
-
-                        let new_key =
-                            format!("{}_rrs_w{}.{}", new_key, &resize_width, file_extension);
-
-                        let put_req = PutObjectRequest {
-                            bucket: bucket.to_string(),
-                            key: new_key,
-                            body: Some(ByteStream::from(buffer)),
-                            content_type: Some(content_type.to_string()),
-                            ..Default::default()
-                        };
-
-                        if let Err(e) = s3_client.put_object(put_req).await {
-                            error!("Failed to upload thumbnail: {}", e);
-                        } else {
-                            info!("Uploaded thumbnail");
                         }
                     }
                 } else {
@@ -176,7 +166,55 @@ async fn func(event: serde_json::Value, _: Context) -> Result<(), Error> {
     Ok(())
 }
 
+async fn upload_image(
+    resize_message: Result<(), image::ImageError>,
+    content_type: &String,
+    key: &String,
+    resize_width: &u32,
+    bucket: &str,
+    buffer: Vec<u8>,
+    s3_client: &S3Client,
+) -> ControlFlow<()> {
+    if let Err(e) = resize_message {
+        error!("Failed to resize image: {}", e);
+        return ControlFlow::Break(());
+    }
+    let file_extension = match content_type.as_str() {
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/webp" => "webp",
+        _ => {
+            error!(
+                "Unsupported file extension for content type: {}",
+                &content_type
+            );
+            return ControlFlow::Break(());
+        }
+    };
+    let new_key = match key.rsplitn(2, '.').collect::<Vec<_>>().last() {
+        Some(part) => *part,
+        None => key.as_str(),
+    };
+    let new_key = format!("{}_rrs_w{}.{}", new_key, &resize_width, file_extension);
+    let put_req = PutObjectRequest {
+        bucket: bucket.to_string(),
+        key: new_key,
+        body: Some(ByteStream::from(buffer)),
+        content_type: Some(content_type.to_string()),
+        ..Default::default()
+    };
+
+    if let Err(e) = s3_client.put_object(put_req).await {
+        error!("Failed to upload thumbnail: {}", e);
+    } else {
+        info!("Uploaded thumbnail");
+    }
+    ControlFlow::Continue(())
+}
+
 fn resize_image(img: &DynamicImage, width: &u32) -> Result<DynamicImage, Error> {
+    
+
     let height = img.height() * width / img.width();
     Ok(img.resize_exact(width.clone(), height, image::imageops::FilterType::Nearest))
 }
