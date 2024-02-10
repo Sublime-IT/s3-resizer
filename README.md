@@ -91,6 +91,8 @@ Now go back into the CloudFront service and then:
 3. In the bottom, where it says `Viewer Request` choose "CloudFront Functions" and then "rewrite-width-parameter-s3".
 4. Save changes
 
-This is all setup you need. Try uploading an image to the new bucket, and then visit the cloudfront url: https://my.cloudfront.url/test-image.jpg?width=500".
+This is all setup you need. Try uploading an image to the new bucket, and then visit the cloudfront url:
+ * https://my.cloudfront.url/test-image.jpg?width=128
+ * https://my.cloudfront.url/test-image.jpg?width=1920
 
 If the size is not a pre-defined size, it will fallback to the original size.
