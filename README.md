@@ -74,11 +74,13 @@ Then create the cloudformation, and wait for it to complete.
 When it is complete, go to lambda and select the new lambda function (for example `my-sample-test-s3-bucket-rust-lambda`). Then:
 
 1. Click on the `Configuration` tab
-2. Select `S3` as source
-3. For the bucket, select the newly created bucket
-4. Event-Types should be set to `All object create events`
-5. Optionally, you can add a prefix/suffix if there is a certain sub-folder and/or image type that the generations should only happen to
-6. Add the trigger
+2. Go to the `Triggers` tab
+3. Add Trigger
+4. Select `S3` as source
+5. For the bucket, select the newly created bucket
+6. Event-Types should be set to `All object create events`
+7. Optionally, you can add a prefix/suffix if there is a certain sub-folder and/or image type that the generations should only happen to
+8. Add the trigger
 
 Next head over to the `CloudFront` service that was created. Go into functions, and create a new `cloudfront-js-2.0` function. Give it a name - This can be `rewrite-width-parameter-s3`
 
