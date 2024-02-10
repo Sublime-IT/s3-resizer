@@ -14,6 +14,7 @@ const SIZES: [u32; 10] = [
     128, 256, 384, 640, 750, 828, 1080, 1200, 1440, 1920
 ];
 const CONVERT_TO_WEBP: bool = true;
+const SKIP_UPSCALING: bool = true;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -213,7 +214,9 @@ async fn upload_image(
 }
 
 fn resize_image(img: &DynamicImage, width: &u32) -> Result<DynamicImage, Error> {
-    
+    if img.width() <= *width && SKIP_UPSCALING {
+        return Ok(img.clone());
+    }
 
     let height = img.height() * width / img.width();
     Ok(img.resize_exact(width.clone(), height, image::imageops::FilterType::Nearest))
